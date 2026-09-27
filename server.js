@@ -34,7 +34,7 @@ app.get('/api/news', async (req, res) => {
         'Reply with ONLY a JSON array (no markdown, no extra text) of 10 objects, ' +
         'each shaped like {"title": "...", "summary": "..."} where summary is one short sentence.';
 
-    const model = 'gemini-3.1-flash';
+    const model = 'gemini-3.1-flash-lite';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
     const response = await fetch(url, {
