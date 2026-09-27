@@ -1,6 +1,13 @@
 // server.js
 // Simple Express server that serves a homepage and one AI-powered feature:
-// "Today's Top 10 News" using the Google Gemini API with Google Search grounding.
+// "Today's Top 10 News" using Hugging Face's FREE Inference Providers router.
+//
+// NOTE: Hugging Face's free router does NOT do live web search/grounding
+// like Gemini did (no google_search tool). So the model answers from its
+// own training knowledge, not from today's actual live headlines. For a
+// class assignment this is usually fine, but the "news" may not be 100%
+// up-to-the-minute or fully accurate. If you need real live news later,
+// you'd need to pair this with an actual news API.
 
 require('dotenv').config();
 const express = require('express');
@@ -15,54 +22,54 @@ app.use(express.static(path.join(__dirname, 'public')));
 // AI feature endpoint
 app.get('/api/news', async (req, res) => {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.HF_TOKEN;
 
     if (!apiKey) {
       return res.status(500).json({
-        error: 'GEMINI_API_KEY is missing. Add it in Render > Environment.'
+        error: 'HF_TOKEN is missing. Add it in Render > Environment.'
       });
     }
 
     const topic = (req.query.topic || '').trim();
 
     const promptText = topic
-      ? `Search the web and find today's top 10 news headlines about "${topic}". ` +
-        'Reply with ONLY a JSON array (no markdown, no extra text) of 10 objects, ' +
+      ? `Give today's top 10 news headlines about "${topic}" based on your knowledge. ` +
+        'Reply with ONLY a JSON array (no markdown, no extra text, no code fences) of 10 objects, ' +
         'each shaped like {"title": "...", "summary": "..."} where summary is one short sentence. ' +
-        'If fewer than 10 relevant results exist, return as many as you found.'
-      : 'Search the web and find today\'s top 10 world news headlines. ' +
-        'Reply with ONLY a JSON array (no markdown, no extra text) of 10 objects, ' +
+        'If fewer than 10 relevant items exist, return as many as you can.'
+      : "Give today's top 10 world news headlines based on your knowledge. " +
+        'Reply with ONLY a JSON array (no markdown, no extra text, no code fences) of 10 objects, ' +
         'each shaped like {"title": "...", "summary": "..."} where summary is one short sentence.';
 
-    const model = 'gemini-3.8-flash';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    // Hugging Face Inference Providers router — OpenAI-compatible endpoint (free tier available)
+    const url = 'https://router.huggingface.co/v1/chat/completions';
+    const model = 'meta-llama/Llama-3.1-8B-Instruct';
 
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
+        Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        contents: [
+        model,
+        messages: [
           {
-            parts: [{ text: promptText }]
+            role: 'user',
+            content: promptText
           }
-        ],
-        tools: [{ google_search: {} }]
+        ]
       })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Gemini API error:', data);
+      console.error('Hugging Face API error:', data);
       return res.status(500).json({ error: data.error?.message || 'AI request failed' });
     }
 
-    const parts = data.candidates?.[0]?.content?.parts || [];
-    const textBlock = parts.map((p) => p.text || '').join('\n');
-
+    const textBlock = data.choices?.[0]?.message?.content || '';
     const cleaned = textBlock.replace(/```json|```/g, '').trim();
 
     let news;
